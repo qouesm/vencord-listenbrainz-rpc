@@ -1,10 +1,9 @@
 import { definePluginSettings } from "@api/Settings";
 import { Link } from "@components/Link";
-// import { Devs } from "@utils/constants";
 import { Logger } from "@utils/Logger";
 import definePlugin, { OptionType } from "@utils/types";
-import { filters, findByPropsLazy, mapMangledModuleLazy } from "@webpack";
-import { FluxDispatcher, Forms } from "@webpack/common";
+import { findByPropsLazy } from "@webpack";
+import { ApplicationAssetUtils, FluxDispatcher, Forms } from "@webpack/common";
 
 interface ActivityAssets {
     large_image?: string;
@@ -53,21 +52,24 @@ const enum ActivityFlag {
     INSTANCE = 1 << 0,
 }
 
+const enum NameFormat {
+    StatusName = "status-name",
+    ArtistFirst = "artist-first",
+    SongFirst = "song-first",
+    ArtistOnly = "artist",
+    SongOnly = "song"
+}
+
+
 const applicationId = "1090155131007406132";
 const placeholderId = "2a96cbd8b46e442fc41c2b86b821562f";
 
 const logger = new Logger("ListenBrainzRPC");
 
 const presenceStore = findByPropsLazy("getLocalPresence");
-const assetManager = mapMangledModuleLazy(
-    "getAssetImage: size must === [number, number] for Twitch",
-    {
-        getAsset: filters.byCode("apply("),
-    }
-);
 
 async function getApplicationAsset(key: string): Promise<string> {
-    return (await assetManager.getAsset(applicationId, [key, undefined]))[0];
+    return (await ApplicationAssetUtils.fetchAssetIds(applicationId, [key]))[0];
 }
 
 function setActivity(activity: Activity | null) {
@@ -98,9 +100,36 @@ const settings = definePluginSettings({
         default: true,
     },
     statusName: {
-        description: "text shown in status",
+        description: "custom status text",
         type: OptionType.STRING,
         default: "some music",
+    },
+    nameFormat: {
+        description: "Show name of song and artist in status name",
+        type: OptionType.SELECT,
+        options: [
+            {
+                label: "Use custom status name",
+                value: NameFormat.StatusName,
+                default: true
+            },
+            {
+                label: "Use format 'artist - song'",
+                value: NameFormat.ArtistFirst
+            },
+            {
+                label: "Use format 'song - artist'",
+                value: NameFormat.SongFirst
+            },
+            {
+                label: "Use artist name only",
+                value: NameFormat.ArtistOnly
+            },
+            {
+                label: "Use song name only",
+                value: NameFormat.SongOnly
+            }
+        ],
     },
     useListeningStatus: {
         description: 'show "Listening to" status instead of "Playing"',
@@ -121,6 +150,11 @@ const settings = definePluginSettings({
                 value: "placeholder"
             }
         ],
+    },
+    useLogo: {
+        description: "Show ListenBrainz logo on album art",
+        type: OptionType.BOOLEAN,
+        default: true,
     }
 });
 
@@ -175,6 +209,7 @@ export default definePlugin({
 
             const trackMetadata = listen.track_metadata;
             const albumName = trackMetadata.release_name || "Unknown";
+
             const artistName = trackMetadata.artist_name || "Unknown";
 
             const mbRes = await fetch(
@@ -248,7 +283,7 @@ export default definePlugin({
             {
                 large_image: await getApplicationAsset(largeImage),
                 large_text: trackData.album || undefined,
-                small_image: await getApplicationAsset("listenbrainz"),
+                small_image: settings.store.useLogo ? await getApplicationAsset("listenbrainz") : undefined,
                 small_text: "ListenBrainz",
             } : {
                 large_image: await getApplicationAsset("listenbrainz"),
@@ -268,9 +303,25 @@ export default definePlugin({
                 url: `https://www.listenbrainz.org/user/${settings.store.username}`,
             });
 
+        const statusName = (() => {
+            switch (settings.store.nameFormat) {
+                case NameFormat.ArtistFirst:
+                    return trackData.artist + " - " + trackData.name;
+                case NameFormat.SongFirst:
+                    return trackData.name + " - " + trackData.artist;
+                case NameFormat.ArtistOnly:
+                    return trackData.artist;
+                case NameFormat.SongOnly:
+                    return trackData.name;
+                default:
+                    return settings.store.statusName;
+            }
+        })();
+
+
         return {
             application_id: applicationId,
-            name: settings.store.statusName,
+            name: statusName,
 
             details: trackData.name,
             state: trackData.artist,
