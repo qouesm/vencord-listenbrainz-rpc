@@ -221,10 +221,10 @@ export default definePlugin({
 
             const mbJson = await mbRes.json();
             const releases = mbJson.releases || [];
-
-            let releaseGroup = releases[0]['release-group'].id;
-
-            const caaRes = await fetch(`https://coverartarchive.org/release-group/${releaseGroup}`)
+            console.log(releases);
+            let releaseGroup = releases[0].id;
+            console.log(releaseGroup);
+            const caaRes = await fetch(`https://corsproxy.io/?url=https://coverartarchive.org/release/${releaseGroup}`)
             if (!caaRes.ok) throw `${caaRes.status} ${caaRes.statusText}`;
             const caaJson = await caaRes.json();
 
