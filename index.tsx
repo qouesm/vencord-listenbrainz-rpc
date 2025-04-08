@@ -22,6 +22,7 @@ interface Activity {
   details?: string;
   timestamps?: {
     start?: number;
+    end?: number;
   };
   assets?: ActivityAssets;
   buttons?: Array<string>;
@@ -38,6 +39,8 @@ interface TrackData {
   name: string;
   album: string;
   artist: string;
+  durationMs?: number;
+  recordingMBID?: string;
   url: string;
   imageUrl?: string;
 }
@@ -111,6 +114,12 @@ const settings = definePluginSettings({
     type: OptionType.BOOLEAN,
     default: false,
   },
+  useTimeBar: {
+    description:
+      "use track duration to display a time bar (must be using Listening status)",
+    type: OptionType.BOOLEAN,
+    default: true,
+  },
   statusName: {
     description: "custom status text",
     type: OptionType.STRING,
@@ -151,7 +160,7 @@ const settings = definePluginSettings({
   useListeningStatus: {
     description: 'show "Listening to" status instead of "Playing"',
     type: OptionType.BOOLEAN,
-    default: false,
+    default: true,
   },
   missingArt: {
     description: "When album or album art is missing",
@@ -174,6 +183,9 @@ const settings = definePluginSettings({
     default: true,
   },
 });
+
+var currentRecordingMBID = "";
+var currentStart = 0;
 
 export default definePlugin({
   name: "ListenBrainzRPC",
@@ -235,7 +247,6 @@ export default definePlugin({
 
       const trackMetadata = listen.track_metadata;
       const albumName = trackMetadata.release_name || "Unknown";
-
       const artistName = trackMetadata.artist_name || "Unknown";
 
       const mbRes = await fetch(
@@ -271,6 +282,8 @@ export default definePlugin({
         name: trackMetadata.track_name || "Unknown",
         album: albumName,
         artist: artistName,
+        durationMs: trackMetadata.additional_info.duration_ms,
+        recordingMBID: trackMetadata.additional_info.recording_mbid,
         url: url,
         imageUrl: imageUrl,
       };
@@ -365,6 +378,11 @@ export default definePlugin({
       }
     })();
 
+    if (currentRecordingMBID != trackData.recordingMBID) {
+      currentRecordingMBID = trackData.recordingMBID;
+      currentStart = Date.now();
+    }
+
     return {
       application_id: applicationId,
       name: statusName,
@@ -373,6 +391,12 @@ export default definePlugin({
       state: trackData.artist,
       assets,
 
+      timestamps: {
+        start: settings.store.useTimeBar ? currentStart : undefined,
+        end: settings.store.useTimeBar
+          ? currentStart + (trackData.durationMs ?? 0)
+          : undefined,
+      },
       buttons: buttons.length ? buttons.map((v) => v.label) : undefined,
       metadata: {
         button_urls: buttons.map((v) => v.url),
