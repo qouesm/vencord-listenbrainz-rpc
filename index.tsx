@@ -90,9 +90,16 @@ const settings = definePluginSettings({
     type: OptionType.STRING,
   },
   shareUsername: {
-    description: "show link to ListenBrainz profile",
+    description:
+      "show link to ListenBrainz profile (may only be visible to other users)",
     type: OptionType.BOOLEAN,
     default: false,
+  },
+  shareSong: {
+    description:
+      "show link to song on ListenBrainz (may only be visible to other users)",
+    type: OptionType.BOOLEAN,
+    default: true,
   },
   hideWithSpotify: {
     description: "hide ListenBrainz presence if Spotify is running",
@@ -296,6 +303,8 @@ export default definePlugin({
     const trackData = await this.fetchTrackData();
     if (!trackData) return null;
 
+    console.table(trackData);
+
     const largeImage = this.getLargeImage(trackData);
     const assets: ActivityAssets = largeImage
       ? {
@@ -311,17 +320,18 @@ export default definePlugin({
           large_text: trackData.album || undefined,
         };
 
-    const buttons: ActivityButton[] = [
-      {
-        label: "View Song",
-        url: trackData.url,
-      },
-    ];
+    const buttons: ActivityButton[] = [];
 
     if (settings.store.shareUsername)
       buttons.push({
         label: "ListenBrainz Profile",
         url: `https://www.listenbrainz.org/user/${settings.store.username}`,
+      });
+
+    if (settings.store.shareSong)
+      buttons.push({
+        label: "View Song",
+        url: trackData.url,
       });
 
     const statusName = (() => {
@@ -349,7 +359,7 @@ export default definePlugin({
       state: trackData.artist,
       assets,
 
-      buttons: buttons.map((v) => v.label),
+      buttons: buttons.length ? buttons.map((v) => v.label) : undefined,
       metadata: {
         button_urls: buttons.map((v) => v.url),
       },
