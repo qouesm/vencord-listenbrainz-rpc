@@ -66,7 +66,7 @@ const placeholderId = "2a96cbd8b46e442fc41c2b86b821562f";
 
 const logger = new Logger("ListenBrainzRPC");
 
-const presenceStore = findByPropsLazy("getLocalPresence");
+const PresenceStore = findByPropsLazy("getLocalPresence");
 
 async function getApplicationAsset(key: string): Promise<string> {
   return (await ApplicationAssetUtils.fetchAssetIds(applicationId, [key]))[0];
@@ -105,6 +105,11 @@ const settings = definePluginSettings({
     description: "hide ListenBrainz presence if Spotify is running",
     type: OptionType.BOOLEAN,
     default: true,
+  },
+  hideWithActivity: {
+    description: "hide ListenBrainz presence if you have any other presence",
+    type: OptionType.BOOLEAN,
+    default: false,
   },
   statusName: {
     description: "custom status text",
@@ -288,22 +293,31 @@ export default definePlugin({
   },
 
   async getActivity(): Promise<Activity | null> {
+    if (settings.store.hideWithActivity) {
+      if (
+        PresenceStore.getActivities().some(
+          (a) => a.application_id !== applicationId,
+        )
+      ) {
+        return null;
+      }
+    }
+
     if (settings.store.hideWithSpotify) {
-      for (const activity of presenceStore.getActivities()) {
-        if (
-          activity.type === ActivityType.LISTENING &&
-          activity.application_id !== applicationId
-        ) {
-          // there is already music status because of Spotify or richerCider (probably more)
-          return null;
-        }
+      if (
+        PresenceStore.getActivities().some(
+          (a) =>
+            a.type === ActivityType.LISTENING &&
+            a.application_id !== applicationId,
+        )
+      ) {
+        // there is already music status because of Spotify or richerCider (probably more)
+        return null;
       }
     }
 
     const trackData = await this.fetchTrackData();
     if (!trackData) return null;
-
-    console.table(trackData);
 
     const largeImage = this.getLargeImage(trackData);
     const assets: ActivityAssets = largeImage
