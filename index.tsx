@@ -260,20 +260,22 @@ export default definePlugin({
       const mbJson = await mbRes.json();
       const releases = mbJson.releases || [];
 
-      let releaseGroup = releases[0]["release-group"].id;
-
+      let releaseGroup = releases.length? releases[0]["release-group"].id : "Unknown release group";
+      let caaJson = {};
+      let url = "";
+      let images = [];
       const caaRes = await fetch(
         `https://coverartarchive.org/release-group/${releaseGroup}`,
       );
-      if (!caaRes.ok) throw `${caaRes.status} ${caaRes.statusText}`;
-      const caaJson = await caaRes.json();
-
-      const url: string = caaJson.release;
-
-      const images: string = caaJson["images"];
+      if (caaRes.ok) {
+        caaJson = await caaRes.json();
+        url = caaJson.release;  
+        images = caaJson["images"];
+      }
+          
       let imageUrl: string = "";
       for (const image of images) {
-        imageUrl = image["thumbnails"].large || "";
+        imageUrl = image["thumbnails"]? image["thumbnails"].large || "" :  "";
         if (!imageUrl) continue;
         break;
       }
@@ -355,7 +357,7 @@ export default definePlugin({
         url: `https://www.listenbrainz.org/user/${settings.store.username}`,
       });
 
-    if (settings.store.shareSong)
+    if (settings.store.shareSong && trackData.url.length > 0)
       buttons.push({
         label: "View Song",
         url: trackData.url,
